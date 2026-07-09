@@ -8,13 +8,19 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, fil
 TOKEN = os.getenv("TOKEN")
 HF_TOKEN = os.getenv("HF_TOKEN")
 
-# Servidor de monitoreo optimizado para UptimeRobot
+# Servidor de monitoreo mejorado para UptimeRobot
 class HealthCheck(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.send_header('Content-type', 'text/plain')
         self.end_headers()
         self.wfile.write(b"OK")
+    
+    # Esta función evita el error 501 que veías en los logs
+    def do_HEAD(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'text/plain')
+        self.end_headers()
 
 def run_web():
     port = int(os.environ.get("PORT", 8080))
