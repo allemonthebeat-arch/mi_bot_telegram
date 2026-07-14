@@ -1,19 +1,26 @@
+import os
 import time
+import threading
 import requests
+from flask import Flask
 
-# Tus datos exactos
+# 1. Configuración de Flask para Render (mantiene el bot "vivo")
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Bot activo y corriendo", 200
+
+# 2. Configuración de tu Bot de Telegram
 TOKEN = "8617996721:AAEwD0nvkhxfEG5im070OgRTtKZIUY6zS3s"
 CHAT_ID = "7486041480"
 
 def obtener_tasa_binance():
     try:
-        # Consultamos una API estable de Binance P2P o paralelo
         url = "https://ve.dolarapi.com/v1/dolares/paralelo"
         response = requests.get(url)
         data = response.json()
-        
-        # Sacamos el promedio (que en tu captura estaba en 831.02)
-        # Y le sumamos los 32 bolívares de brecha para que marque los 863.00 reales de tu Binance P2P
+        # Sumamos 32 bolívares para tener la tasa real de tu Binance P2P
         tasa_real_binance = float(data["promedio"]) + 32
         return tasa_real_binance
     except Exception as e:
@@ -31,15 +38,28 @@ def enviar_mensaje_telegram(texto):
     except Exception as e:
         print("Error enviando a Telegram:", e)
 
-# Bucle infinito para que mande el precio cada 5 minutos
-print("Bot activo y corriendo cada 5 minutos...")
-while True:
-    tasa = obtener_tasa_binance()
-    if tasa:
-        # Estructuramos el mensaje claro con la tasa real
-        mensaje = f"TASA BINANCE P2P: {tasa:.2f}"
-        enviar_mensaje_telegram(mensaje)
-        print(f"Mensaje enviado con éxito: {tasa:.2f}")
-    
-    # Esperar 5 minutos (300 segundos)
-    time.sleep(300)
+# 3. El bucle infinito del bot corriendo en segundo plano
+def bucle_bot():
+    print("Bucle del bot iniciado...")
+    while True:
+        try:
+            tasa = obtener_tasa_binance()
+            if tasa:
+                mensaje = f"TASA BINANCE P2P: {tasa:.2f}"
+                enviar_mensaje_telegram(mensaje)
+                print(f"Mensaje enviado con éxito: {tasa:.2f}")
+        except Exception as e:
+            print(f"Error en el bucle: {e}")
+        
+        # Espera 5 minutos (300 segundos)
+        time.sleep(300)
+
+# 4. Arrancar el bot en un hilo separado antes de iniciar Flask
+bot_thread = threading.Thread(target=bucle_bot)
+bot_thread.daemon = True
+bot_thread.start()
+
+if __name__ == "__main__":
+    # Render asigna automáticamente un puerto en la variable de entorno PORT
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
