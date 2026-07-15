@@ -1,32 +1,24 @@
 import os
-import time
-import threading
 import requests
 from flask import Flask
 
 app = Flask(__name__)
 
-# Variable global para guardar la última tasa calculada
-ultima_tasa = "863.02"
-
-@app.route('/')
-def home():
-    # Cuando Google Sheets entre aquí, verá la tasa limpia directamente
-    return str(ultima_tasa), 200
-
+# Configuración de tu Bot de Telegram
 TOKEN = "8617996721:AAEwD0nvkhxfEG5im070OgRTtKZIUY6zS3s"
 CHAT_ID = "7486041480"
 
 def obtener_tasa_binance():
     try:
         url = "https://ve.dolarapi.com/v1/dolares/paralelo"
-        response = requests.get(url)
+        response = requests.get(url, timeout=5)
         data = response.json()
+        # Sumamos 32 bolívares para tener la tasa real de tu Binance P2P
         tasa_real_binance = float(data["promedio"]) + 32
-        return tasa_real_binance
+        return f"{tasa_real_binance:.2f}"
     except Exception as e:
         print("Error obteniendo tasa:", e)
-        return None
+        return "863.02"  # Tasa de respaldo si falla la API
 
 def enviar_mensaje_telegram(texto):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
@@ -35,30 +27,21 @@ def enviar_mensaje_telegram(texto):
         "text": texto
     }
     try:
-        requests.post(url, json=payload)
+        requests.post(url, json=payload, timeout=5)
     except Exception as e:
         print("Error enviando a Telegram:", e)
 
-def bucle_bot():
-    global ultima_tasa
-    print("Bucle del bot iniciado...")
-    while True:
-        try:
-            tasa = obtener_tasa_binance()
-            if tasa:
-                # Guardamos la tasa formateada
-                ultima_tasa = f"{tasa:.2f}"
-                mensaje = f"TASA BINANCE P2P: {ultima_tasa}"
-                enviar_mensaje_telegram(mensaje)
-                print(f"Mensaje enviado con éxito: {ultima_tasa}")
-        except Exception as e:
-            print(f"Error en el bucle: {e}")
-        
-        time.sleep(300)
-
-bot_thread = threading.Thread(target=bucle_bot)
-bot_thread.daemon = True
-bot_thread.start()
+@app.route('/')
+def home():
+    # 1. Obtenemos la tasa en tiempo real de una vez
+    tasa = obtener_tasa_binance()
+    
+    # 2. Le mandamos el mensaje a tu Telegram
+    mensaje = f"TASA BINANCE P2P: {tasa}"
+    enviar_mensaje_telegram(mensaje)
+    
+    # 3. Le respondemos a Google Sheets solo con el número
+    return str(tasa), 200
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
