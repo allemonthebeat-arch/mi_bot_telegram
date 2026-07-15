@@ -7,23 +7,36 @@ app = Flask(__name__)
 TOKEN = "8617996721:AAEwD0nvkhxfEG5im070OgRTtKZIUY6zS3s"
 CHAT_ID = "7486041480"
 
-# Guardamos la última tasa enviada en memoria para comparar
 ultima_tasa_enviada = None
 
-def obtener_tasa_binance():
+def obtener_tasa_binance_p2p():
     try:
-        url = "https://ve.dolarapi.com/v1/dolares/paralelo"
-        response = requests.get(url, timeout=5)
+        # URL oficial del buscador de anuncios de Binance P2P
+        url = "https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search"
+        
+        # Parámetros para buscar: Compra de USDT con Bolívares (VES)
+        payload = {
+            "asset": "USDT",
+            "fiat": "VES",
+            "merchantCheck": True,  # Solo comerciantes verificados para mayor seguridad
+            "page": 1,
+            "rows": 5,
+            "tradeType": "BUY"
+        }
+        
+        response = requests.post(url, json=payload, timeout=5)
         data = response.json()
         
-        # SUMA TOTAL: 32 Bs (brecha original) + 10 Bs (ajuste nuevo) = 42 Bs
-        tasa_real_binance = float(data["promedio"]) + 42
+        # Tomamos el primer anuncio disponible (el mejor precio del P2P)
+        precio_p2p = float(data["data"][0]["adv"]["price"])
         
-        return f"{tasa_real_binance:.2f}"
+        # Le sumamos los 10 Bs que me pediste para tu negocio
+        tasa_final = precio_p2p + 10
+        
+        return f"{tasa_final:.2f}"
     except Exception as e:
-        print("Error obteniendo tasa:", e)
-        # Tasa de respaldo también ajustada con los 10 Bs extra (863.02 -> 873.02)
-        return "873.02"
+        print("Error obteniendo tasa de Binance P2P:", e)
+        return "873.02"  # Tasa de respaldo por si Binance bloquea la petición temporalmente
 
 def enviar_mensaje_telegram(texto):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
@@ -39,13 +52,12 @@ def enviar_mensaje_telegram(texto):
 @app.route('/')
 def home():
     global ultima_tasa_enviada
-    tasa = obtener_tasa_binance()
+    tasa = obtener_tasa_binance_p2p()
     
-    # Solo manda mensaje a Telegram si la tasa cambia de valor
     if tasa != ultima_tasa_enviada:
-        mensaje = f"TASA BINANCE P2P: {tasa}"
+        mensaje = f"TASA BINANCE P2P REAL: {tasa}"
         enviar_mensaje_telegram(mensaje)
-        ultima_tasa_enviada = tasa  # Actualizamos el registro
+        ultima_tasa_enviada = tasa
     
     return str(tasa), 200
 
